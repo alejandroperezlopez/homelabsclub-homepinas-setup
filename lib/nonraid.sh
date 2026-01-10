@@ -549,16 +549,16 @@ install_nonraid() {
     fi
     
     # Install dependencies
-    # if ! install_nonraid_dependencies; then
-    #     whiptail --msgbox "Failed to install dependencies!" 10 60 
-    #     return 1
-    # fi
+    if ! install_nonraid_dependencies; then
+        whiptail --msgbox "Failed to install dependencies!" 10 60 
+        return 1
+    fi
     
     # Build NonRAID
-    # if ! build_nonraid; then
-    #     whiptail --msgbox "Failed to build NonRAID!" 10 60 
-    #     return 1
-    # fi
+    if ! build_nonraid; then
+        whiptail --msgbox "Failed to build NonRAID!" 10 60 
+        return 1
+    fi
     
     # Select disks
     local selected_disks=$(select_data_disks)
