@@ -94,8 +94,8 @@ show_banner() {
     clear
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════╗"
-    echo "║     HomePinas Setup Script v${SCRIPT_VERSION}           ║"
-    echo "║     Homelabs.club 2026        ║"
+    echo "║     HomePinas Setup Script v${SCRIPT_VERSION}          ║"
+    echo "║     Homelabs.club 2026                     ║"
     echo "╚════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
