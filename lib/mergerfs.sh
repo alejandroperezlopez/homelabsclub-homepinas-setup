@@ -94,7 +94,7 @@ configure_mergerfs() {
         
     # Create fstab entry with noauto option (won't mount at boot, systemd service will handle it)
     local source_paths=$(echo "$data_disks" | tr ' ' ': ')
-    local fstab_entry="$source_paths $mount_point fuse.mergerfs noauto,allow_other,use_ino,cachefiles=partial,dropcacheonclose=true,category.create=mfs 0 0"
+    local fstab_entry="$source_paths $mount_point fuse.mergerfs noauto,allow_other,use_ino,dropcacheonclose=true,category.create=mfs 0 0"
     
     # Check if entry already exists
     if grep -q "$mount_point" /etc/fstab; then
