@@ -366,10 +366,6 @@ wipe_and_format_disk() {
     info_msg "Clearing backup partition table..."
     dd if=/dev/zero of="$disk" bs=1M count=100 seek=$(($(blockdev --getsz "$disk") / 2048 - 100)) 2>/dev/null || true
 
-    info_msg "Creating partitions over the wiped disk"
-    parted "$disk" --script mklabel gpt 2>/dev/null
-    parted "$disk" --script mkpart primary 1MiB 100% 2>/dev/null
-    
     # Inform kernel of changes
     partprobe "$disk" 2>/dev/null || true
     
@@ -378,9 +374,25 @@ wipe_and_format_disk() {
     # Create XFS filesystem
     if mkfs.xfs -f "$disk"; then
         success_msg "Filesystem created on $disk (S/N: $serial)"
-        return 0
     else
         error_msg "Failed to create filesystem on $disk"
+        return 1
+    fi
+
+    info_msg "Creating partitions over the wiped disk"
+
+    if parted "$disk" --script mklabel gpt 2>/dev/null; then
+        success_msg "GPT label created successfully on $disk"
+    else
+        error_msg "Failed to create GPT label on $disk"
+        return 1
+    fi
+    
+    if parted "$disk" --script mkpart primary 1MiB 100% 2>/dev/null; then
+        success_msg "Partition created correctly on $disk"
+        return 0
+    else
+        error_msg "Failed to create partition on $disk"
         return 1
     fi
 }
