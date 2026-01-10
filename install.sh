@@ -110,7 +110,8 @@ show_main_menu() {
             "3" "Show NonRAID Status" \
             "4" "Install MergerFS" \
             "5" "Install Custom FanControl" \
-            "6" "Exit" \
+            "6" "Fix 2.5G Randon MAC" \
+            "7" "Exit" \
             3>&1 1>&2 2>&3 )
         
         exitstatus=$?
@@ -141,6 +142,10 @@ show_main_menu() {
                 install_fanctl
                 ;;
             6)
+                load_module "fix_random_mac"
+                fix_random_mac
+                ;;
+            7)
                 echo -e "${GREEN}Goodbye!${NC}"
                 exit 0
                 ;;
