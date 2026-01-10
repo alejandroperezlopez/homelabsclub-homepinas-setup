@@ -30,7 +30,21 @@ check_fanctl_dependencies() {
 }
 
 install_fanctl() {
-
+    # Easter egg 🥚
+        if systemctl list-unit-files | grep -q '^homepinas-fanctl.service'; then
+            whiptail --title "🤨 Pero bueno..." --msgbox \
+            "Esto ya está instalado.
+            
+            Si ya lo tienes funcionando…
+            ¿pa qué le das otra vez?
+            
+            Paneo pa ti 
+            
+            (Pista: puedes ver logs con:
+            journalctl -u homepinas-fanctl.service -f)" \
+            15 60
+            return 0
+        fi
     info_msg "Installing HomePinas Fan Control..."
     
     if ! check_fanctl_dependencies; then
