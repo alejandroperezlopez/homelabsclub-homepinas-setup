@@ -463,6 +463,24 @@ setup_nonraid_array() {
     # Run nmdctl create interactively
     if nmdctl create; then
         success_msg "NonRAID array created successfully."
+        
+        # Starting the array in case it was skipped during creation
+        nmdctl start || true
+
+        info_msg "Giving format to the created blocks."
+
+        local nmd_blocks=($(ls /dev/nmd*p1 2>/dev/null || true))
+        
+        for nmd_block in "${nmd_blocks[@]}"; do
+            if mkfs.xfs -f "${nmd_block}" 2>/dev/null; then
+                success_msg "Created filesystem for ${nmd_block}"
+            else
+                error_msg "Failed creating filesystem for ${nmd_block}"
+                return 1
+        done
+
+        nmdctl mount
+
         return 0
     else
         error_msg "Failed to create NonRAID array."
