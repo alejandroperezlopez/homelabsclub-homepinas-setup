@@ -148,9 +148,6 @@ show_main_menu() {
 
 # Main execution
 main() {
-
-    exec < /dev/tty
-
     show_banner
     check_and_elevate
     check_base_dependencies
