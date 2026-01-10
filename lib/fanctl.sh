@@ -101,9 +101,13 @@ EOF
     success_msg "HomePinas Fan Control installed and running."
 
     whiptail --msgbox \
-        "Fan control installed successfully.\n\n"\
-        "Service: ${SERVICE_NAME}.service\n"\
-        "Timer:   ${SERVICE_NAME}.timer\n\n"\
-        "Logs:\njournalctl -u ${SERVICE_NAME}.service -f" \
-        16 70
+    "Fan control installed successfully.
+    
+    Service: ${SERVICE_NAME}.service
+    Timer:   ${SERVICE_NAME}.timer
+    
+    Logs:
+    journalctl -u ${SERVICE_NAME}.service -f" \
+    16 70
+
 }
