@@ -137,7 +137,7 @@ show_main_menu() {
                 install_mergerfs
                 ;;
             5)
-                load_module "fancrl"
+                load_module "fanctl"
                 install_fanctl
                 ;;
             6)
