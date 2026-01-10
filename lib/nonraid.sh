@@ -367,8 +367,8 @@ wipe_and_format_disk() {
     dd if=/dev/zero of="$disk" bs=1M count=100 seek=$(($(blockdev --getsz "$disk") / 2048 - 100)) 2>/dev/null || true
 
     info_msg "Creating partitions over the wiped disk"
-    parted "$disk" --script mklabel gpt 2>/dev/null || true
-    parted "$disk" --script mkpart primary 1MiB 100% 2>/dev/null || true
+    parted "$disk" --script mklabel gpt 2>/dev/null
+    parted "$disk" --script mkpart primary 1MiB 100% 2>/dev/null
     
     # Inform kernel of changes
     partprobe "$disk" 2>/dev/null || true
