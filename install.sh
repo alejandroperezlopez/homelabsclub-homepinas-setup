@@ -9,7 +9,7 @@
 set -e
 
 # Configuration
-REPO_BASE_URL="https://raw.githubusercontent.com/alejandroperezlopez/homelabsclub-homepinas-setup/main"
+REPO_BASE_URL="https://raw.githubusercontent.com/vpnblocking/homelabsclub-homepinas-setup/main"
 SCRIPT_VERSION="1.0.0"
 
 # Color definitions
@@ -110,7 +110,7 @@ show_main_menu() {
             "3" "Show NonRAID Status" \
             "4" "Install MergerFS" \
             "5" "Install Custom FanControl" \
-            "6" "Fix 2.5G Randon MAC" \
+            "6" "Fix 2.5G Random MAC" \
             "7" "Exit" \
             3>&1 1>&2 2>&3 )
         
