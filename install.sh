@@ -110,7 +110,7 @@ show_main_menu() {
             "3" "Show NonRAID Status" \
             "4" "Install MergerFS" \
             "5" "Install Custom FanControl" \
-            "6" "Exit"
+            "6" "Exit" \
             3>&1 1>&2 2>&3 )
         
         exitstatus=$?
