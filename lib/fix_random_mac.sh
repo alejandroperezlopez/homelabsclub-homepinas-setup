@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #############################################
 # Fix Random MAC on RTL8125 / 2.5G NIC
 # Module for HomePinas Setup Script
@@ -8,6 +6,7 @@
 fix_random_mac() {
 
     local STORE="/etc/persistent-mac-2p5g"
+    local CONN_NAME="eth1-2p5g"
 
     info_msg "Detecting 2.5G (RTL8125) network interface..."
 
@@ -51,26 +50,27 @@ fix_random_mac() {
         return 1
     fi
 
-    # Find NetworkManager connection bound to this interface
-    local CONN
-    CONN=$(nmcli -t -f NAME,DEVICE con show | awk -F: -v i="$IFACE" '$2==i {print $1}')
+    # Ensure interface is managed by NetworkManager
+    nmcli dev set "$IFACE" managed yes 2>/dev/null || true
 
-    if [[ -z "$CONN" ]]; then
-        error_msg "No NetworkManager connection found for interface $IFACE."
-        error_msg "Make sure the interface is connected and retry."
-        return 1
+    # Ensure dedicated NetworkManager connection exists
+    if ! nmcli con show "$CONN_NAME" &>/dev/null; then
+        info_msg "Creating dedicated NetworkManager connection: $CONN_NAME"
+        nmcli con add type ethernet ifname "$IFACE" con-name "$CONN_NAME"
+        nmcli con mod "$CONN_NAME" connection.autoconnect yes
+        nmcli con mod "$CONN_NAME" connection.autoconnect-priority 100
     fi
 
-    info_msg "Applying persistent MAC to NetworkManager connection: $CONN"
+    info_msg "Applying persistent MAC to NetworkManager connection: $CONN_NAME"
 
     # Apply MAC persistently (NO interface down)
-    nmcli con mod "$CONN" ethernet.cloned-mac-address "$MAC"
-    nmcli con mod "$CONN" ethernet.mac-address-blacklist ""
+    nmcli con mod "$CONN_NAME" ethernet.cloned-mac-address "$MAC"
+    nmcli con mod "$CONN_NAME" ethernet.mac-address-blacklist ""
 
     success_msg "Persistent random MAC configured successfully."
     warning_msg "A reboot is required for the MAC to take effect."
 
     whiptail --title "Reboot Required" \
-        --msgbox "The persistent MAC has been configured.\n\nPlease reboot to apply the change safely." \
+        --msgbox "The persistent MAC has been configured for the 2.5G interface.\n\nPlease reboot the system to apply the change safely." \
         10 60
 }
