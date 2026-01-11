@@ -477,6 +477,7 @@ setup_nonraid_array() {
             else
                 error_msg "Failed creating filesystem for ${nmd_block}"
                 return 1
+            fi
         done
 
         nmdctl mount
