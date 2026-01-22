@@ -112,7 +112,8 @@ show_main_menu() {
             "5" "Install Custom FanControl" \
             "6" "Fix 2.5G Random MAC" \
             "7" "Activate USB Recovery" \
-            "8" "Exit" \
+            "8" "Change PWM fan curve" \
+            "9" "Exit" \
             3>&1 1>&2 2>&3 )
         
         exitstatus=$?
@@ -151,6 +152,10 @@ show_main_menu() {
                 activate_usb_recovery
                 ;;
             8)
+                load_module "fanctl_curve"
+                fanctl_curve_menu
+                ;;
+            9)
                 echo -e "${GREEN}Goodbye!${NC}"
                 exit 0
                 ;;
