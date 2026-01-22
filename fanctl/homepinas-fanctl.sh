@@ -2,54 +2,59 @@
 set -euo pipefail
 
 # =========================
-# Configuración
+# Default configuration
+# (used if no user config)
 # =========================
 
-# Curva PWM1 (HDD/SSD) según temp máxima HDD/SSD (°C)
-# Ajusta si quieres.
-pwm_hdd_from_temp() {
-  local t="$1"
-  if   (( t <= 30 )); then echo 65
-  elif (( t <= 35 )); then echo 90
-  elif (( t <= 40 )); then echo 130
-  elif (( t <= 45 )); then echo 180
-  else                    echo 230
-  fi
-}
+# PWM1 (HDD / SSD)
+PWM1_T30=65
+PWM1_T35=90
+PWM1_T40=130
+PWM1_T45=180
+PWM1_TMAX=230
 
-# Curva PWM2 (NVMe+CPU) según temp efectiva max(NVMe, CPU) (°C)
-pwm_fast_from_temp() {
-  local t="$1"
-  if   (( t <= 40 )); then echo 80
-  elif (( t <= 50 )); then echo 120
-  elif (( t <= 60 )); then echo 170
-  else                    echo 255
-  fi
-}
+# PWM2 (NVMe + CPU)
+PWM2_T40=80
+PWM2_T50=120
+PWM2_T60=170
+PWM2_TMAX=255
 
-# Mínimos/máximos por seguridad
+# Safety limits
 MIN_PWM1=65
 MIN_PWM2=80
 MAX_PWM=255
 
-# Failsafe
-CPU_FAILSAFE_C=80        # si CPU >= esto => ambos 255
-FAST_FAILSAFE_C=70       # si NVMe/FAST >= esto => pwm2 255 (y opcional pwm1 también)
+CPU_FAILSAFE_C=80
+FAST_FAILSAFE_C=70
 
-# Histeresis (en PWM): no cambia si la diferencia es pequeña
 HYST_PWM=10
 
-# Estado (últimos PWM aplicados)
-STATE_FILE="/run/homepinas-fanctl.state"
+# =========================
+# Optional user config
+# =========================
 
-# DRYRUN=1 para no escribir PWM (por si quieres volver a probar)
+CONFIG_FILE="/usr/local/bin/homepinas-fanctl.conf"
+
+log() { echo "[$(date '+%F %T')] $*" >&2; }
+
+if [[ -r "$CONFIG_FILE" ]]; then
+  log "Cargando configuración de usuario: $CONFIG_FILE"
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+else
+  log "No hay configuración de usuario, usando valores por defecto"
+fi
+
+# =========================
+# Runtime config
+# =========================
+
+STATE_FILE="/run/homepinas-fanctl.state"
 DRYRUN="${DRYRUN:-0}"
 
 # =========================
 # Helpers
 # =========================
-
-log() { echo "[$(date '+%F %T')] $*"; }
 
 need_root() {
   if (( EUID != 0 )); then
@@ -61,98 +66,91 @@ need_root() {
 find_emc_hwmon() {
   local hw
   hw="$(grep -l '^emc2305$' /sys/class/hwmon/hwmon*/name 2>/dev/null | head -n1 || true)"
-  if [[ -z "$hw" ]]; then
-    echo ""
-    return 1
-  fi
-  echo "${hw%/name}"
+  [[ -n "$hw" ]] && echo "${hw%/name}"
 }
 
 read_cpu_temp_c() {
   local f="/sys/class/thermal/thermal_zone0/temp"
-  if [[ -r "$f" ]]; then
-    echo $(( $(cat "$f") / 1000 ))
-  else
-    echo 0
-  fi
+  [[ -r "$f" ]] && echo $(( $(cat "$f") / 1000 )) || echo 0
 }
 
-# SATA temp: prefer attribute 194, fallback 190; take RAW_VALUE column and strip junk.
 read_sata_temp_c() {
-  local dev="$1"
-  local t=""
+  local dev="$1" t=""
   t="$(smartctl -A "$dev" 2>/dev/null | awk '$1==194 {print $10; exit}')"
-  if [[ -z "$t" ]]; then
-    t="$(smartctl -A "$dev" 2>/dev/null | awk '$1==190 {print $10; exit}')"
-  fi
+  [[ -z "$t" ]] && t="$(smartctl -A "$dev" 2>/dev/null | awk '$1==190 {print $10; exit}')"
   t="$(echo "$t" | sed 's/[^0-9].*$//')"
-  if [[ "$t" =~ ^[0-9]+$ ]]; then
-    echo "$t"
-  else
-    echo ""
-  fi
+  [[ "$t" =~ ^[0-9]+$ ]] && echo "$t"
 }
 
-# NVMe USB ASMedia temp: from "Temperature:" line.
 read_nvme_usb_temp_c() {
-  local dev="$1"
-  local t=""
+  local dev="$1" t=""
   t="$(smartctl -a -d sntasmedia "$dev" 2>/dev/null | awk '/^Temperature:/ {print $2; exit}')"
-  if [[ "$t" =~ ^[0-9]+$ ]]; then
-    echo "$t"
-  else
-    echo ""
+  [[ "$t" =~ ^[0-9]+$ ]] && echo "$t"
+}
+
+# =========================
+# PWM curves
+# =========================
+
+pwm_hdd_from_temp() {
+  local t="$1"
+  if   (( t <= 30 )); then echo "$PWM1_T30"
+  elif (( t <= 35 )); then echo "$PWM1_T35"
+  elif (( t <= 40 )); then echo "$PWM1_T40"
+  elif (( t <= 45 )); then echo "$PWM1_T45"
+  else                    echo "$PWM1_TMAX"
   fi
 }
 
-# Safe write with hysteresis
-apply_pwm() {
-  local pwm_path="$1"
-  local new="$2"
-  local last="$3"
-  local label="$4"
+pwm_fast_from_temp() {
+  local t="$1"
+  if   (( t <= 40 )); then echo "$PWM2_T40"
+  elif (( t <= 50 )); then echo "$PWM2_T50"
+  elif (( t <= 60 )); then echo "$PWM2_T60"
+  else                    echo "$PWM2_TMAX"
+  fi
+}
 
-  # Clamp
+# =========================
+# PWM apply with hysteresis
+# =========================
+
+apply_pwm() {
+  local path="$1" new="$2" last="$3" label="$4"
+
   (( new < 0 )) && new=0
   (( new > MAX_PWM )) && new=$MAX_PWM
 
-  # Histeresis
-  if [[ -n "$last" && "$last" =~ ^[0-9]+$ ]]; then
+  if [[ "$last" =~ ^[0-9]+$ ]]; then
     local diff=$(( new > last ? new-last : last-new ))
     if (( diff < HYST_PWM )); then
-      log "$label: mantiene PWM=$last (nuevo $new, diff $diff < $HYST_PWM)" >&2
+      log "$label: mantiene PWM=$last (nuevo $new, diff $diff < $HYST_PWM)"
       echo "$last"
-      return 0
+      return
     fi
   fi
 
   if (( DRYRUN == 1 )); then
-    log "$label: (DRYRUN) pondría PWM=$new" >&2
+    log "$label: (DRYRUN) pondría PWM=$new"
   else
-    echo "$new" > "$pwm_path"
-    log "$label: PWM aplicado $new → $pwm_path" >&2
+    echo "$new" > "$path"
+    log "$label: PWM aplicado $new → $path"
   fi
 
   echo "$new"
 }
 
-
 load_last_state() {
-  if [[ -r "$STATE_FILE" ]]; then
-    # formato: PWM1=xxx PWM2=yyy
-    # shellcheck disable=SC1090
-    source "$STATE_FILE" || true
-  fi
+  [[ -r "$STATE_FILE" ]] && source "$STATE_FILE" || true
   PWM1_LAST="${PWM1_LAST:-}"
   PWM2_LAST="${PWM2_LAST:-}"
 }
 
 save_state() {
-  local p1="$1" p2="$2"
   umask 077
   cat > "$STATE_FILE" <<EOF
-PWM1_LAST=$p1
-PWM2_LAST=$p2
+PWM1_LAST=$1
+PWM2_LAST=$2
 EOF
 }
 
@@ -162,59 +160,44 @@ EOF
 
 need_root
 
-if ! command -v smartctl >/dev/null 2>&1; then
-  echo "ERROR: smartctl no encontrado. Instala smartmontools." >&2
+command -v smartctl >/dev/null || {
+  echo "ERROR: smartctl no encontrado (instala smartmontools)" >&2
   exit 1
-fi
+}
 
-HWMON="$(find_emc_hwmon)" || true
-if [[ -z "$HWMON" ]]; then
-  echo "ERROR: No encuentro el hwmon de emc2305. ¿Está cargado el driver?" >&2
+HWMON="$(find_emc_hwmon)"
+[[ -z "$HWMON" ]] && {
+  echo "ERROR: hwmon emc2305 no encontrado" >&2
   exit 1
-fi
+}
 
 PWM1_PATH="$HWMON/pwm1"
 PWM2_PATH="$HWMON/pwm2"
 
-if [[ ! -w "$PWM1_PATH" || ! -w "$PWM2_PATH" ]]; then
-  echo "ERROR: No puedo escribir en $PWM1_PATH o $PWM2_PATH" >&2
-  echo "Comprueba permisos/driver/overlay." >&2
+[[ -w "$PWM1_PATH" && -w "$PWM2_PATH" ]] || {
+  echo "ERROR: No se puede escribir en pwm1/pwm2" >&2
   exit 1
-fi
+}
 
 load_last_state
 
-# Cache del scan (para saber qué /dev/sdX son NVMe USB ASMedia)
 SCAN="$(smartctl --scan 2>/dev/null || true)"
 
 MAX_HDD=0
 MAX_NVME=0
 
 log "Controlador: $HWMON"
-log "Leyendo temperaturas por disco…"
+log "Leyendo temperaturas…"
 
-# Enumerar /dev/sd?
 for d in /dev/sd?; do
   [[ -b "$d" ]] || continue
 
   if echo "$SCAN" | grep -q "^$d .*sntasmedia"; then
-    # NVMe USB ASMedia
     t="$(read_nvme_usb_temp_c "$d")"
-    if [[ -n "$t" ]]; then
-      log "  NVMe USB  $d → ${t}°C"
-      (( t > MAX_NVME )) && MAX_NVME=$t
-    else
-      log "  NVMe USB  $d → (sin temp)"
-    fi
+    [[ -n "$t" ]] && log "  NVMe USB  $d → ${t}°C" && (( t > MAX_NVME )) && MAX_NVME=$t
   else
-    # SATA/SSD/HDD
     t="$(read_sata_temp_c "$d")"
-    if [[ -n "$t" ]]; then
-      log "  HDD/SSD   $d → ${t}°C"
-      (( t > MAX_HDD )) && MAX_HDD=$t
-    else
-      log "  HDD/SSD   $d → (sin temp)"
-    fi
+    [[ -n "$t" ]] && log "  HDD/SSD   $d → ${t}°C" && (( t > MAX_HDD )) && MAX_HDD=$t
   fi
 done
 
@@ -223,32 +206,28 @@ log "  CPU       → ${CPU_TEMP}°C"
 
 FAST_TEMP=$(( MAX_NVME > CPU_TEMP ? MAX_NVME : CPU_TEMP ))
 
-# Si no hay discos HDD/SSD con temp válida, MAX_HDD queda 0 → no queremos PWM mínimo ridículo:
-# en ese caso, mantén al menos MIN_PWM1.
 PWM1_TARGET="$(pwm_hdd_from_temp "$MAX_HDD")"
 PWM2_TARGET="$(pwm_fast_from_temp "$FAST_TEMP")"
 
-# Clamps mínimos
 (( PWM1_TARGET < MIN_PWM1 )) && PWM1_TARGET=$MIN_PWM1
 (( PWM2_TARGET < MIN_PWM2 )) && PWM2_TARGET=$MIN_PWM2
 
-# Failsafe
 if (( CPU_TEMP >= CPU_FAILSAFE_C )); then
-  log "FAILSAFE: CPU ${CPU_TEMP}°C >= ${CPU_FAILSAFE_C}°C → PWM1=255 PWM2=255"
+  log "FAILSAFE CPU ${CPU_TEMP}°C → PWM1=255 PWM2=255"
   PWM1_TARGET=255
   PWM2_TARGET=255
 elif (( FAST_TEMP >= FAST_FAILSAFE_C )); then
-  log "FAILSAFE: FAST ${FAST_TEMP}°C >= ${FAST_FAILSAFE_C}°C → PWM2=255"
+  log "FAILSAFE FAST ${FAST_TEMP}°C → PWM2=255"
   PWM2_TARGET=255
 fi
 
 log "Resumen:"
-log "  Max HDD/SSD: ${MAX_HDD}°C → PWM1 target: $PWM1_TARGET"
+log "  Max HDD/SSD: ${MAX_HDD}°C → PWM1 $PWM1_TARGET"
 log "  Max NVMe:    ${MAX_NVME}°C"
-log "  FAST(max NVMe/CPU): ${FAST_TEMP}°C → PWM2 target: $PWM2_TARGET"
+log "  FAST:        ${FAST_TEMP}°C → PWM2 $PWM2_TARGET"
 
-NEW_PWM1="$(apply_pwm "$PWM1_PATH" "$PWM1_TARGET" "${PWM1_LAST:-}" "PWM1 (HDD/SSD)")"
-NEW_PWM2="$(apply_pwm "$PWM2_PATH" "$PWM2_TARGET" "${PWM2_LAST:-}" "PWM2 (NVMe+CPU)")"
+NEW_PWM1="$(apply_pwm "$PWM1_PATH" "$PWM1_TARGET" "$PWM1_LAST" "PWM1 (HDD/SSD)")"
+NEW_PWM2="$(apply_pwm "$PWM2_PATH" "$PWM2_TARGET" "$PWM2_LAST" "PWM2 (NVMe+CPU)")"
 
 save_state "$NEW_PWM1" "$NEW_PWM2"
 
