@@ -32,7 +32,7 @@ check_fanctl_dependencies() {
 check_i2c_fan_overlay() {
 
     local CONFIG_FILE="/boot/firmware/config.txt"
-    local OVERLAY_LINE="dtoverlay=i2c-fan,emc2302,i2c_csi_dsi0"
+    local OVERLAY_LINE="dtoverlay=i2c-fan,emc2301,addr=0x2e,i2c_csi_dsi0,minpwm=65,maxpwm=255,midtemp=45000,maxtemp=6500"
 
     info_msg "Checking i2c fan controller overlay..."
 
