@@ -79,28 +79,34 @@ After reboot, re-run the installer to finish the setup." \
 }
 
 install_fanctl() {
+
     # Easter egg 🥚
-        if systemctl list-unit-files | grep -q '^homepinas-fanctl.service'; then
-            whiptail --title "🤨 Pero bueno..." --msgbox \
-            "Esto ya está instalado.
-            
-            Si ya lo tienes funcionando…
-            ¿pa qué le das otra vez?
-            
-            Paneo pa ti 
-            
-            (Pista: puedes ver logs con:
-            journalctl -u homepinas-fanctl.service -f)" \
-            15 60
-            return 0
-        fi
+    if systemctl list-unit-files | grep -q '^homepinas-fanctl.service'; then
+        whiptail --title "🤨 Pero bueno..." --msgbox \
+"Esto ya está instalado.
+
+Si ya lo tienes funcionando…
+¿pa qué le das otra vez?
+
+Paneo pa ti 😏
+
+(Pista: puedes ver logs con:
+journalctl -u homepinas-fanctl.service -f)" \
+        15 60
+        return 0
+    fi
+
     info_msg "Installing HomePinas Fan Control..."
-    
+
     check_i2c_fan_overlay
     case $? in
         0) ;;              # todo OK
         2) return 0 ;;     # overlay añadido → esperar reboot
-        *) re
+        *)
+            return 1
+            ;;
+    esac
+
     if ! check_fanctl_dependencies; then
         error_msg "Cannot continue without required dependencies."
         return 1
